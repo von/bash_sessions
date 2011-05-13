@@ -411,10 +411,13 @@ function _session_dirstack_commands()
     # Generate commands to recreate our directory stack
     local _count=1
     local _cmd=""
-    for path in ${DIRSTACK[@]} ; do
+    for path in "${DIRSTACK[@]}" ; do
 	if test -n "${_cmd}" ; then
 	    _cmd="; ${_cmd}"
 	fi
+	# Need to replace '~' with '${HOME}' so that it expands
+	# correctly when sourced in quotes.
+	path=`echo ${path} | sed -e s/\~/\\${HOME}/`
 	# Last element is a cd not a pushd
 	if test ${_count} -eq ${#DIRSTACK[@]} ; then
 	    _cmd="cd \"${path}\" ${_cmd}"
