@@ -204,7 +204,7 @@ function _session_launch()  # [-e] <session_name>
     local usage="usage: ${FUNCNAME}: <session name>"
     if test "X${1}" = "X-e" ; then
 	shift
-	local _bash="exec bash"
+	local _bash="exec /bin/bash"
 	export BASH_SESSION_SUBSHELL=0
     else
 	local _bash="bash"
