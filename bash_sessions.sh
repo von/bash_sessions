@@ -558,5 +558,5 @@ function _session_ps1()
     # Optional argument is format string, default is [%s]
     # Example: PS1="(\u@]h)$(_session_ps1) $"
     _session_in_valid || return
-    printf ${1:-"[%s]"} $(_session_name)
+    printf "${1:-[%s]}" $(_session_name)
 }
