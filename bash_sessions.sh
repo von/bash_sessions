@@ -355,6 +355,12 @@ function _session_load_file_internal()
 	history -r  # Load history from ${HISTFILE}
     fi
 
+    # Restore saved variables
+    export SHLVL=${_BASH_SESSION_SHLVL}
+
+    export BASH_SESSION=${_name}
+
+    # Run user commands
     if test -n "${BASH_SESSION_LAUNCH_COMMAND}" ; then
 	${BASH_SESSION_LAUNCH_COMMAND}
     fi
@@ -363,10 +369,6 @@ function _session_load_file_internal()
     test -f ${_dir}/user.sh && \
 	source ${_dir}/user.sh
 
-    # Restore saved variables
-    export SHLVL=${_BASH_SESSION_SHLVL}
-
-    export BASH_SESSION=${_name}
     trap _session_exit EXIT
 }
 
