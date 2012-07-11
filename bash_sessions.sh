@@ -36,105 +36,6 @@ BASH_SESSION_NO_SAVE=0
 
 # $BASH_SESSION_EXIT_COMMAND is executed when a session is exited.
 
-######################################################################
-#
-# Main point of entry
-
-
-function session()
-{
-    local usage="\
-usage:
- ${FUNCNAME} <-h|help>              # Print help
- ${FUNCNAME} launch <session name>  # Starts session in a subshell
-				    # Creates session if it doesn't exist.
- ${FUNCNAME} exec <session name>    # Replaces current shell with session.
-				    # Creates session if it doesn't exist.
-
-
- ${FUNCNAME} in-session             # Return 0 if in a session, 1 otherwise
- ${FUNCNAME} list                   # List all sessions
- ${FUNCNAME} name                   # Print session name (or nothing)
- ${FUNCNAME} delete <session name>  # Delete given session
- ${FUNCNAME} nosave                 # Don't save session state on exit
- ${FUNCNAME} save [<session name>]  # Save session snapshot.
-				    # If name given, save as given name.
-				    # If not in  session, name must
-				    # be provided.
- ${FUNCNAME} unlock <session name>  # Unlock session
-"
-    if test $# -eq 0 ; then
-	echo "Argument required."
-	echo "${usage}"
-	return 1
-    fi
-    local arg=${1}; shift
-    case ${arg} in
-	delete) # Delete session
-	    if test $# -ne 1 ; then
-		echo "-d requires session name"
-		return 1
-	    fi
-	    _session_delete ${@} || return 1
-	    ;;
-	exec) # Exec session
-	    echo "Execing session ${1}"
-	    _session_exec ${1} || return 1
-	    # Will never get here.
-	    ;;
-	-h|help) # Print help
-	    echo "${usage}"
-	    ;;
-	in-session) # Return 0 if in valid session, 1 otherwise
-	    _session_in_valid && return 0
-	    return 1
-	    ;;
-	launch) # Start given session
-	    echo "Starting session ${1}"
-	    _session_launch ${1} || return 1
-	    ;;
-	list) # List sessions
-	    _session_list
-	    ;;
-	name) # Print current session name
-	    _session_name
-	    ;;
-	nosave) # Do not save session on exit
-	    export BASH_SESSION_NO_SAVE=1
-	    echo "Session will not be saved on exit"
-	    ;;
-	save) # Save session snapshot
-	    if test $# -eq 0 ; then
-		if _session_in_valid ; then
-		    :
-		else
-		    echo "Not in session. Must provide session name."
-		    return 1
-		fi
-	    fi
-	    _session_save "$@" || return 1
-	    if test $# -eq 0 ; then
-		echo "Session saved."
-	    else
-		echo "Session ${1} saved."
-	    fi
-	    ;;
-	unlock) # Unlock given session
-	    if test $# -ne 1 ; then
-		echo "-U requires session name"
-		return 1
-	    fi
-	    _session_unlock ${@} || return 1
-	    echo "Session ${1} unlocked"
-	    ;;
-	*)
-	    echo "Unknown option: ${arg}"
-	    echo "${usage}"
-	    return 1
-	    ;;
-    esac
-    return 0
-}
 
 ######################################################################
 #
@@ -191,26 +92,10 @@ function _session_save()
     history -w
 }
 
-function _session_exec() # <session_name>
-{
-    _session_launch -e "$@"  # Will not return
-}
-
-function _session_launch()  # [-e] <session_name>
+function _session_exec()  # <session_name>
 {
     # Start new session given by ${1}
-    # If -e is given, exec's the session instead of starting in subshell
-    # Will create new session if needed
-    local usage="usage: ${FUNCNAME}: <session name>"
-    if test "X${1}" = "X-e" ; then
-	shift
-	local _bash="exec /bin/bash"
-	export BASH_SESSION_SUBSHELL=0
-    else
-	local _bash="bash"
-	export BASH_SESSION_SUBSHELL=1
-    fi
-    local _new_session=${1:?$usage} ; shift
+    local _new_session=${1} ; shift
 
     test -d ${BASH_SESSIONS_DIR} || mkdir ${BASH_SESSIONS_DIR}
 
@@ -235,10 +120,8 @@ function _session_launch()  # [-e] <session_name>
 	return 1
     fi
 
-    ${_bash} --init-file ${_load_file}
-    # If ${bash} is 'exec bash' we won't reach this point.
-    unset BASH_SESSION_SUBSHELL
-    return 0
+    exec bash --init-file ${_load_file}
+    # Will not get here
 }
 
 function _session_create()
@@ -249,8 +132,6 @@ function _session_create()
     local _dir=$(_session_dir $_new_session)
 
     test -d ${_dir} || mkdir -p ${_dir}
-    # Copy this very file to the directory so load.sh can source it
-    cp ${BASH_SESSIONS_FILE} ${_dir}
     _session_create_load_file ${_dir}/load.sh
 
     # The first time we load a session we want it to source the
@@ -288,8 +169,7 @@ function _session_delete() # <session_name>
     fi
     local _dir=$(_session_dir ${_name})
     echo "Deleting session '${_name}' (${_dir})"
-    rm -f ${_dir}/*
-    rmdir ${_dir}
+    rm -rf ${_dir}
 }
 
 ######################################################################
@@ -299,11 +179,18 @@ function _session_delete() # <session_name>
 function _session_create_load_file()
 {
     # Create a file that will load the session in its directory
+    # Kudos: http://www.beaconhill.com/blog/?p=29
     local usage="usage: ${FUNCNAME}: <file name>"
     local _filename=${1:?$usage} ; shift
     (
 	echo "# load.sh created $(date)"
-	echo "source ${BASH_SESSIONS_FILE}"
+        declare -f '_session_dir'
+        declare -f '_session_exec'
+        declare -f '_session_load_file_internal'
+        declare -f '_session_load_error'
+        declare -f '_session_lock'
+        declare -f '_session_lock_file'
+        declare -f '_session_lock_msg'
 	echo "_session_load_file_internal || _session_load_error"
     ) > ${_filename}
     return 0
@@ -374,18 +261,10 @@ function _session_load_file_internal()
 
 function _session_load_error()
 {
-    # Handle an error in session_load_internal
+    # Handle an error in session_load_internal. Does not return.
     echo "Error launching session."
-    if test "${BASH_SESSION_SUBSHELL}" -eq 1 ; then
-	# This is a subshell, just exit
-	exit 1
-    else
-	# We were exec'ed, so we've replaced the calling shell.
-	# If we exit, we kill the user's calling shell.
-	# But at this point we're in a bash shell with no initialization.
-	# Don't know what else we can do though.
-	:
-    fi
+    sleep 5
+    exit 1
 }
 
 function _session_exit()
@@ -481,7 +360,7 @@ function _session_lock_msg() # <session_name>
     local _name=${1:?"usage: ${FUNCNAME} <session name>"}
     _session_locked ${_name} || return 1
     echo "Session '${_name}' is locked by $(_session_locked_by ${_name})"
-    echo "  Remove $(_session_lock_file ${_name}) to unlock."
+    echo "  Use: '${0} unlock ${_name}' to unlock."
 }
 
 function _session_unlock() # <session_name>
@@ -522,43 +401,91 @@ function _session_valid() # <session_name>
 
 ######################################################################
 #
-# Extras
+# Main point of entry
 
-function _session_complete()
-{
-    # Function for use in complete
-    # E.g.: complete -F _session_complete session
-    local _command=${1}
-    local _word_being_completed=${2}
-    local _previous_word=${3}
 
-    local _words=""
-    local _cmds="delete exec -h help in-session launch list name nosave save"
-    case ${COMP_CWORD} in
-	1)  # First argument must be command
-	    #
-	    _words="${_cmds}"
-	    ;;
-	2)  # Second argument.
-	    # Complete on session list only for arguments that take
-	    # a session name.
-	    case ${_previous_word} in
-		delete|exec|launch|unlock)
-		    _words=$(_session_list)
-		    ;;
-	    esac
-	    ;;
-    esac
+usage="\
+usage:
+ ${FUNCNAME} <-h|help>              # Print help
+ ${FUNCNAME} launch <session name>  # Starts session in a subshell
+				    # Creates session if it doesn't exist.
+ ${FUNCNAME} exec <session name>    # Replaces current shell with session.
+				    # Creates session if it doesn't exist.
 
-    COMPREPLY=( $(compgen -W "${_words}" ${_word_being_completed}) )
-}
 
-function _session_ps1()
-{
-    # Return string for inclusion in PS1
-    # Returns nothing if not in session
-    # Optional argument is format string, default is [%s]
-    # Example: PS1="(\u@]h)$(_session_ps1) $"
-    _session_in_valid || return
-    printf "${1:-[%s]}" $(_session_name)
-}
+ ${FUNCNAME} in-session             # Return 0 if in a session, 1 otherwise
+ ${FUNCNAME} list                   # List all sessions
+ ${FUNCNAME} name                   # Print session name (or nothing)
+ ${FUNCNAME} delete <session name>  # Delete given session
+ ${FUNCNAME} nosave                 # Don't save session state on exit
+ ${FUNCNAME} save [<session name>]  # Save session snapshot.
+				    # If name given, save as given name.
+				    # If not in  session, name must
+				    # be provided.
+ ${FUNCNAME} unlock <session name>  # Unlock session
+"
+if test $# -eq 0 ; then
+    echo "Argument required."
+    echo "${usage}"
+    return 1
+fi
+cmd=${1}; shift
+# Guard: check for commands that need session name
+case ${cmd} in
+    delete|exec|unlock)
+	if test $# -ne 1 ; then
+            echo "usage: ${0} ${cmd} <session name>"
+            exit 1
+        fi
+        ;;
+esac
+case ${cmd} in
+    delete) # Delete session
+	_session_delete ${@} || exit 1
+	;;
+    exec) # Exec session
+	echo "Execing session ${1}"
+	_session_exec ${1} || exit 1
+	    # Will never get here.
+	;;
+    -h|help) # Print help
+	echo "${usage}"
+	;;
+    in-session) # Return 0 if in valid session, 1 otherwise
+	_session_in_valid && exit 0
+	return 1
+	;;
+    list) # List sessions
+	_session_list
+	;;
+    name) # Print current session name
+	_session_name
+	;;
+    save) # Save session snapshot
+	if test $# -eq 0 ; then
+	    if _session_in_valid ; then
+		:
+	    else
+		echo "Not in session. Must provide session name."
+		return 1
+	    fi
+	fi
+	_session_save "$@" || exit 1
+	if test $# -eq 0 ; then
+	    echo "Session saved."
+	else
+	    echo "Session ${1} saved."
+	fi
+	;;
+    unlock) # Unlock given session
+	_session_unlock ${@} || exit 1
+	echo "Unlocked sessions: ${@}"
+	;;
+    *)
+	echo "Unknown option: ${cmd}"
+	echo "${usage}"
+        exit 1
+	;;
+esac
+exit 0
+
