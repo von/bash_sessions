@@ -22,7 +22,7 @@
 #    lock.pid        - A file containing the pid of the shell currently
 #                      holding the lock on the sesssion.
 
-# Where we store session state.       
+# Where we store session state.
 BASH_SESSIONS_DIR=${BASH_SESSIONS_DIR:-~/.bash_sessions}
 
 # Where we can find this file, so we can copy it into session directories
@@ -47,9 +47,9 @@ function session()
 usage:
  ${FUNCNAME} <-h|help>              # Print help
  ${FUNCNAME} launch <session name>  # Starts session in a subshell
-                                    # Creates session if it doesn't exist.
+				    # Creates session if it doesn't exist.
  ${FUNCNAME} exec <session name>    # Replaces current shell with session.
-                                    # Creates session if it doesn't exist.
+				    # Creates session if it doesn't exist.
 
 
  ${FUNCNAME} in-session             # Return 0 if in a session, 1 otherwise
@@ -58,9 +58,9 @@ usage:
  ${FUNCNAME} delete <session name>  # Delete given session
  ${FUNCNAME} nosave                 # Don't save session state on exit
  ${FUNCNAME} save [<session name>]  # Save session snapshot.
-                                    # If name given, save as given name.
-                                    # If not in  session, name must
-                                    # be provided.
+				    # If name given, save as given name.
+				    # If not in  session, name must
+				    # be provided.
  ${FUNCNAME} unlock <session name>  # Unlock session
 "
     if test $# -eq 0 ; then
@@ -234,7 +234,7 @@ function _session_launch()  # [-e] <session_name>
 	echo "Cannot load session \"$(_session_name)\": load.sh does not exist."
 	return 1
     fi
- 
+
     ${_bash} --init-file ${_load_file}
     # If ${bash} is 'exec bash' we won't reach this point.
     unset BASH_SESSION_SUBSHELL
@@ -263,7 +263,7 @@ function _session_list()
     # Print list of sessions, one per line
     test -d ${BASH_SESSIONS_DIR} || return 0
     # Run in subshell to prevent changing current directory
-    ( 
+    (
 	cd ${BASH_SESSIONS_DIR} || return 1
 	for dir in * ; do
 	    test -d ${dir} && echo ${dir%/}
@@ -271,7 +271,7 @@ function _session_list()
 	)
     return 0
 }
-	
+
 function _session_delete() # <session_name>
 {
     # Delete the given session. Must be unlocked
@@ -536,7 +536,7 @@ function _session_complete()
     local _cmds="delete exec -h help in-session launch list name nosave save"
     case ${COMP_CWORD} in
 	1)  # First argument must be command
-	    # 
+	    #
 	    _words="${_cmds}"
 	    ;;
 	2)  # Second argument.
