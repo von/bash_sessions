@@ -184,13 +184,8 @@ function _session_create_load_file()
     local _filename=${1:?$usage} ; shift
     (
 	echo "# load.sh created $(date)"
-        declare -f '_session_dir'
-        declare -f '_session_exec'
-        declare -f '_session_load_file_internal'
-        declare -f '_session_load_error'
-        declare -f '_session_lock'
-        declare -f '_session_lock_file'
-        declare -f '_session_lock_msg'
+        echo "export BASH_SESSIONS_DIR=${BASH_SESSIONS_DIR}"
+        declare -f  # Outputs all the functions in this file
 	echo "_session_load_file_internal || _session_load_error"
     ) > ${_filename}
     return 0
