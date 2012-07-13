@@ -321,7 +321,12 @@ function _session_locked() # <session_name>
     # Return 0 if session is locked, 1 otherwise
     local _name=${1:?"usage: ${FUNCNAME} <session name>"}
     local _lock_file=$(_session_lock_file ${_name})
-    test -f ${_lock_file} && return 0
+    test -f ${_lock_file} || return 1
+    local _pid=$(_session_locked_by ${_name})
+    # See if process is still running
+    ps -p ${_pid} > /dev/null && return 0
+    # Process no longer running, remove lock file
+    rm -f ${_lock_file}
     return 1
 }
 
